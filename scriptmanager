@@ -1,0 +1,298 @@
+#!/bin/bash
+#A better, interactive script manager based on the scripts script manager
+#Has the same functions but, instead of the command line, you get desktop
+#dialog boxes, like a proper program. Choose an action, select some scripts,
+#rinse and repeat.
+
+toLower() 
+{
+  echo "$1" | tr "[:upper:]" "[:lower:]" 
+} 
+
+toUpper() 
+{
+  echo "$1" | tr "[:lower:]" "[:upper:]" 
+}
+
+removeBackups() 
+{
+  c=0
+  for bf in $repo/*~; do
+    if [[ -e "$bf" ]]; then
+      if [[ $c = 0 ]]; then
+        echo "Removing temp files..."
+        c=1
+      fi
+      rm "$bf"
+    fi
+  done
+}
+
+getSettings() 
+{
+	repo="/pub/scripts" # edit this to wherever you store your scripts. $HOME/bin is a good place
+	editor="/usr/bin/geany" # replace this with your favourite editor
+	cache="$HOME/.cache/scriptmanager"
+#	viewer="/usr/bin/gnome-www-browser"
+    defaultscr="default.sh"
+    actions=("Launch" "View" "Edit" "New" "Link" "Copy" "Remove" "Set Safe" "Clear" "Exit")
+    descs=("Execute a script" \
+			"Display the contents of a script" \
+			"Launch $editor with script as argument" \
+			"Create a new script in $repo" \
+			"Create a symbolic link to a script in $repo" \
+			"Make a copy of a script" \
+			"Completely erase a script from $repo" \
+			"Toggle the query before deleting each file" \
+			"Clear out the script and action cache" \
+			"What it says on the tin")
+    safedelete=true #set to false to not be asked before deleting files
+
+	if [[ -e "$cache/sm.lastscript" ]]; then
+		read -r lastscript < "$cache/sm.lastscript"
+	else
+		lastscript=""
+	fi
+
+	if [[ -e "$cache/sm.lastaction" ]]; then
+		read -r lastaction < "$cache/sm.lastaction"
+	else
+		lastaction=""
+	fi
+
+	if [[ -e "$cache/sm.lastcmdopts" ]]; then
+		read -r lastcmdopts < "$cache/sm.lastcmdopts"
+	else
+		lastcmdopts=""
+	fi
+	
+	if [[ -e "$cache/sm.safedel" ]]; then
+		read -r safedelete < "$cache/sm.safedel"
+	else
+		safedelete=true
+	fi
+	
+}
+
+saveSettings() 
+{
+	if [[ ! -d "$cache" ]]; then
+	  mkdir -p "$cache"
+	fi
+	echo "$lastscript" > "$cache/sm.lastscript"
+	echo "$lastaction" > "$cache/sm.lastaction"
+	echo "$lastcmdopts" > "$cache/sm.lastcmdopts"
+	echo "$safedelete" > "$cache/sm.safedel"
+}
+
+
+actionsdialog() 
+{
+	if $safedelete; then
+		actions[7]="Set Unsafe"
+	else
+		actions[7]="Set Safe"
+	fi
+	zenity --list \
+		--title="Choose action" \
+		--text="" \
+		--width=400 --height=320 \
+		--column="Action" \
+		--column="Description" \
+		--print-column=1 \
+		"${actions[0]}" "${descs[0]}" \
+		"${actions[1]}" "${descs[1]}" \
+		"${actions[2]}" "${descs[2]}" \
+		"${actions[3]}" "${descs[3]}" \
+		"${actions[4]}" "${descs[4]}" \
+		"${actions[5]}" "${descs[5]}" \
+		"${actions[6]}" "${descs[6]}" \
+		"${actions[7]}" "${descs[7]}" \
+		"${actions[8]}" "${descs[8]}" \
+		"${actions[9]}" "${descs[9]}"
+}
+
+getsavename()
+{
+	if [[ -z "$lastscript" ]]; then 
+		lastscript="$repo/"
+	fi
+	zenity --file-selection --title="$1" \
+		--save \
+		--filename="$lastscript" \
+		--confirm-overwrite
+}
+
+getscript() 
+{
+	if [[ -z "$lastscript" ]]; then 
+		lastscript="$repo/"
+	fi
+	zenity --file-selection --title="$1" --filename="$lastscript" --multiple --separator=" "
+}
+
+getcmdopts()
+{
+	zenity --entry --title="Commandline options" --text="$1" \
+		--entry-text="$lastcmdopts"
+}
+
+displayinfo()
+{
+	zenity --info --width=400 --no-wrap --timeout 3 "$1" "$2" "$3" "$4"
+}
+
+doLaunch()
+{
+	for filename in $(getscript "Choose script(s) to launch"); do
+		if [[ $filename ]]; then
+			options=$(getcmdopts "$filename")
+			sh "$filename" "$options" &
+		fi
+	done
+	lastscript="$filename"
+	lastcmdopts="$options"
+}
+
+doView()
+{
+	for filename in $(getscript "Choose script(s) to view"); do
+		if [[ $filename ]]; then
+			(zenity --text-info --width=800 --height=1000 --title="Viewing: $filename" < "$filename" )&
+		fi
+	done
+	lastscript="$filename"
+}
+
+doEdit()
+{
+	for filename in $(getscript "Choose script(s) to edit"); do
+		if [[ $filename ]]; then
+			"$editor" "$filename" &
+		fi
+	done
+	lastscript="$filename"
+}
+
+doNew()
+{
+	newscr=$(getsavename "Enter a name for the new script")
+	if [[ $newscr ]]; then
+		if [[ -e "$repo/$defaultscr" ]]; then
+			cp "$repo/$defaultscr" "$newscr"
+		else
+			echo '#!/bin/bash' > "$newscr"
+		fi
+		if [[ -e "$newscr" ]]; then
+		  displayinfo --icon-name="terminal" --title="Script Manager" --text="Script at $newscr created."
+		  chmod a+x "$newscr"
+		  "$editor" "$newscr" &
+		else
+		  displayinfo --icon-name="error" --title="Script Manager" --text="Could not create $newscr."
+		fi
+	fi
+	lastscript="$newscr"
+}
+
+doSymlink()
+{
+	for lastscript in $(getscript "Choose script(s) for Symbolic Link(s)"); do
+		newscr=$(getsavename "Choose name for symbolic link to $lastscript")
+		if [[ $newscr ]]; then
+			if [[ -e "$newscr" ]]; then rm "$newscr"; fi
+			ln -s "$lastscript" "$newscr"
+			if [[ -e "$newscr" ]]; then
+				displayinfo --icon-name="terminal" --title="Script Manager" --text="Link $newscr to $lastscript created."
+			else
+				displayinfo --icon-name="error" --title="Script Manager" --text="Could not create link $newscr to $lastscript."
+			fi
+		fi
+	done
+	lastscript="$newscr"
+}
+
+doCopy()
+{
+	for lastscript in $(getscript "Choose script(s) to copy"); do
+		newscr=$(getsavename "Choose name for copy of $lastscript")
+		if [[ $newscr ]]; then
+			if cp "$lastscript" "$newscr"; then
+				displayinfo --icon-name="terminal" --title="Script Manager" --text="Script $lastscript copied to $newscr."
+				"$editor" "$newscr" &
+			else
+				displayinfo --icon-name="error" --title="Script Manager" --text="Could not copy $lastscript to $newscr."
+			fi
+		fi
+	done
+	lastscript="$newscr"
+}
+
+doRemove()
+{
+	for filename in $(getscript "Choose script(s) to remove"); do
+		if $safedelete; then
+			if (zenity --question --width=300 --title "WARNING" --text="This will permanently remove $filename\nProceed?" > /dev/null); then
+				rm "$filename"
+			fi
+		else
+			rm "$filename"
+		fi
+		if [[ -e "$filename" ]]; then
+			displayinfo --icon-name="error" --title="Script Manager" "Could not remove $filename."
+		else
+			displayinfo --icon-name="terminal" --title="Script Manager" --text="Script $filename removed."
+		fi
+	done
+	lastscript=""
+}
+
+doToggleSafe()
+{
+	if $safedelete; then
+		safedelete=false
+		displayinfo --icon-name="terminal" --title="Script Manager" --text="Safe Delete turned OFF."
+	else
+		safedelete=true
+		displayinfo --icon-name="terminal" --title="Script Manager" --text="Safe Delete turned ON."
+	fi
+}
+
+doClearCache()
+{
+	for i in lastaction lastscript lastcmdopts; do
+	  rm "$cache/sm.$i"
+	done
+	getSettings
+	displayinfo --icon-name="terminal" --title="Script Manager" --text="Cache cleared." 
+}
+
+doMain()
+{
+	getSettings
+	removeBackups
+	while :
+	do
+			
+		if action=$(actionsdialog "$lastaction"); then
+			case $action in
+				"${actions[0]}")	doLaunch;;
+				"${actions[1]}")	doView;;
+				"${actions[2]}")	doEdit;;
+				"${actions[3]}")	doNew;;
+				"${actions[4]}")	doSymlink;;
+				"${actions[5]}")	doCopy;;
+				"${actions[6]}")	doRemove;;
+				"${actions[8]}")	doClearCache;;
+				"${actions[9]}") 	saveSettings; exit;;
+				*)					doToggleSafe;;
+			esac
+		else
+			saveSettings
+			exit
+		fi
+		lastaction="$action"
+		saveSettings
+	done
+}
+
+doMain

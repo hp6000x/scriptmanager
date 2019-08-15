@@ -1,0 +1,181 @@
+#!/bin/bash
+#scripts - a CLI script manager. Allows one to create/modify/delete (and more) scripts in a repository folder
+#call it without arguments for a list of commands and options.
+
+showUsage() {
+  echo "version   : 0.5"
+  echo "last edit : 7th July 2019"
+  echo
+  echo "Usage: $0 {command} [ {command options} ... ]"
+  echo
+  echo "Commands:"
+  echo "  (l)ist    [script name]                   : shows list of scripts, or contents of a script"
+  echo "  (n)ew     {script name}                   : creates a new script, and opens for editing"
+  echo "  (c)opy    {existing script} {new script}  : makes a copy of an existing script with a new name and opens it for editing"
+  echo "  kill      {script name}                   : deletes script from repository"
+  echo "  (e)dit    {script name}                   : Calls the defined editor with script as argument"
+  echo "  (s)ymlink {script name}   {link name}     : creates a symbolic link (shortcut) to a script"
+  echo
+  echo "Settings (static):"
+  echo "  repository            : $repo"
+  echo "  editor                : $editor"
+  echo "  text viewer           : $viewer"
+  echo
+  exit
+}
+
+getSettings() {
+  repo="/pub/scripts"
+  defaultscr="default.sh"
+  editor="$(which geany)"
+  #viewer="$(which firefox)"
+  viewer="$(which less)"
+}
+
+toLower() {
+  echo "$1" | tr "[:upper:]" "[:lower:]" 
+} 
+
+toUpper() {
+  echo "$1" | tr "[:lower:]" "[:upper:]" 
+}
+
+removeBackups() {
+  c=0
+  for bf in $repo/*~; do
+    if [[ -e "$bf" ]]; then
+      if [[ $c = 0 ]]; then
+        echo "Removing temp files..."
+        c=1
+      fi
+      rm "$bf"
+    fi
+  done
+}
+
+listScripts() {
+  removeBackups
+  pushd "$repo"
+  (
+    for fn in *; do
+      if [[ -f "$fn" ]]; then
+        echo "[ $fn ]"
+      fi
+    done
+  ) > "$HOME/.cache/scriptlist.tmp"
+  popd
+  $viewer "$HOME/.cache/scriptlist.tmp"
+  echo "Done."
+}
+
+echo "Script Manager"
+echo "=============="
+echo
+
+getSettings
+
+if [[ -z "$1" ]]; then
+  showUsage
+fi
+
+command=$(toLower "$1")
+shift
+
+if [[ "$command" = "list" ]] | [[ "$command" = "l" ]]; then
+  if [[ -z "$1" ]]; then
+    listScripts
+  else
+    scrname=$(toLower "$1")
+    if [[ -e "$repo/$scrname" ]]; then
+      echo "Viewing script '$scrname'..."
+      #dialog --textbox $repo/$scrname 1000 1000
+      $viewer "$repo/$scrname"
+    fi
+  fi
+elif [[ "$command" = "copy" ]] | [[ "$command" = "c" ]]; then
+  if [[ -e "$repo/$1" ]]; then
+    if [[ -e "$repo/$2" ]]; then
+      echo "Destination script already exists: $2"
+    else
+      echo "Copying script $1 to $2"
+      cp "$repo/$1" "$repo/$2"
+      echo "Done. Opening $2 for editing."
+      $editor "$repo/$2" &
+      echo "Done."
+    fi
+  else
+    echo "Script not found: $1"
+  fi
+elif [[ "$command" = "new" ]] | [[ "$command" = "n" ]]; then
+  if [[ -z "$1" ]]; then
+    echo "Enter a name for the new script: (leave blank to abort)"
+    read -r newscr
+    if [[ -z "$1" ]]; then
+      exit
+    fi
+  else
+    newscr="$1"
+  fi
+  newscr=$(toLower "$newscr")
+  if [[ -e "$repo/$newscr" ]]; then
+    echo "Sorry, there's already a script with the name $newscr in the repo."
+    exit
+  fi
+  echo "Creating script..."
+  if [[ -e "$repo/$defaultscr" ]]; then
+    cp "$repo/$defaultscr" "$repo/$newscr"
+  else
+    echo "#!/bin/bash" > "$repo/$newscr"
+  fi
+  chmod +x "$repo/$newscr"
+  echo "Launching editor..."
+  $editor "$repo/$newscr" &
+  echo "Done."
+elif [[ "$command" = "kill" ]]; then
+  if [[ -z "$1" ]]; then
+    echo "You must supply a script name to delete."
+  fi
+  killscr=$(toLower "$1")
+  if [[ -e "$repo/$killscr" ]]; then
+    echo "Are you sure you want to remove the script '$killscr'?"
+    echo "Type 'YES' (in uppercase, without quotes) and hit enter to confirm."
+    read -r strcheck
+    if [[ -n "$strcheck" ]]; then
+      if [[ "$strcheck" = "YES" ]]; then
+        echo "Removing file."
+        rm "$repo/$killscr"
+        if [[ -e "$repo/$killscr" ]]; then
+          echo "Hmmm. Couldn't remove $killscr. Check your permissions?"
+        else
+          echo "$killscr script removed successfully."
+        fi
+      else
+        echo "Aborted."
+      fi
+    else
+      echo "Aborted."
+    fi
+  else
+    echo "$killscr not found."
+    exit
+  fi
+elif [[ "$command" = "edit" ]] | [[ "$command" = "e" ]]; then
+  if [[ -z "$1" ]]; then
+    echo "You must supply a script name to edit."
+  fi
+  editscr=$(toLower "$1")
+  $editor "$repo/$editscr"
+elif [[ "$command" = "symlink" ]] | [[ "$command" = "s" ]]; then
+  if [[ -z "$2" ]]; then
+    echo "You must supply two arguments"
+  elif [[ -e "$repo/$2" ]]; then
+    echo "A file with the name $2 already exists."
+  elif [[ -e "$repo/$1" ]]; then
+    echo "Creating alias '$2' to '$1'..."
+    ln -s "$repo/$1" "$repo/$2"
+    ls -l "$repo"
+  fi
+else
+  showUsage
+fi
+exit
