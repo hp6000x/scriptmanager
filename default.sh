@@ -12,15 +12,16 @@ FUNCTIONS="$THISPATH/functions.sh"
 
 function Init
 {
+	local tmpfile
+	local inkey
 	if [[ ! -e "$FUNCTIONS" ]]; then
 		echo "functions.sh not found. Do you want to download it to $THISPATH? (Y/n)"
-		read -rs inkey
+		read -rs -n 1 inkey
 		if [[ "$inkey" = "y" ]] | [[ "$inkey" = "" ]]; then
 			tmpfile=$(mktemp)
 			if (wget -O "$tmpfile" "$FUNCTSURL"); then
 				if (mv "$tmpfile" "$FUNCTIONS"); then
 					chmod 755 "$FUNCTIONS"
-					unset tmpfile
 					. "$FUNCTIONS"
 				else
 					echo "Could not create $FUNCTIONS"
@@ -34,7 +35,6 @@ function Init
 			echo "Aborted by user"
 			exit 1
 		fi
-		unset inkey
 	else
 		. "$FUNCTIONS"
 	fi
