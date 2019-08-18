@@ -19,7 +19,7 @@ function Init
 			tmpfile=$(mktemp)
 			if (wget -O "$tmpfile" "$FUNCTSURL"); then
 				if (mv "$tmpfile" "$FUNCTIONS"); then
-					chmod 755 "$THISPATH/functions.sh"
+					chmod 755 "$FUNCTIONS"
 					unset tmpfile
 					. "$FUNCTIONS"
 				else
