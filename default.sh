@@ -7,10 +7,36 @@ THISSCRIPT=$(which "$0")
 THISPATH=$(dirname "$THISSCRIPT")
 VERSIONURL="https://github.com/hp6000x/ /raw/master/VERSION"
 SCRIPTURL="https://github.com/hp6000x/ /raw/master/ "
+FUNCTSURL="https://github.com/hp6000x/useful-functions/raw/master/functions.sh"
+FUNCTIONS="$THISPATH/functions.sh"
 
 function Init
 {
-	true
+	if [[ ! -e "$FUNCTIONS" ]]; then
+		echo "functions.sh not found. Do you want to download it to $THISPATH? (Y/n)"
+		read -rs inkey
+		if [[ "$inkey" = "y" ]] || [[ "$inkey" = "" ]]; then
+			tmpfile=$(mktemp)
+			if (wget -O "$tmpfile" "$FUNCTSURL"); then
+				if (mv "$tmpfile" "$FUNCTIONS"); then
+					chmod 755 "$THISPATH/functions.sh"
+					unset tmpfile
+					. "$FUNCTIONS"
+				else
+					echo "Could not create $FUNCTIONS"
+					exit 2
+			else
+				echo "Couldn't download function.sh"
+				exit 1
+			fi
+		else
+			echo "Aborted by user"
+			exit 1
+		fi
+		unset inkey
+	else
+		. "$FUNCTIONS"
+	fi
 }
 
 function Main
