@@ -27,7 +27,7 @@ function Init
 					exit 2
 				fi
 			else
-				echo "Couldn't download function.sh"
+				echo "Couldn't download functions.sh"
 				exit 1
 			fi
 		else
