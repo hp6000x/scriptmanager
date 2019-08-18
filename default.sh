@@ -15,7 +15,7 @@ function Init
 	if [[ ! -e "$FUNCTIONS" ]]; then
 		echo "functions.sh not found. Do you want to download it to $THISPATH? (Y/n)"
 		read -rs inkey
-		if [[ "$inkey" = "y" ]] || [[ "$inkey" = "" ]]; then
+		if [[ "$inkey" = "y" ]] | [[ "$inkey" = "" ]]; then
 			tmpfile=$(mktemp)
 			if (wget -O "$tmpfile" "$FUNCTSURL"); then
 				if (mv "$tmpfile" "$FUNCTIONS"); then
@@ -25,6 +25,7 @@ function Init
 				else
 					echo "Could not create $FUNCTIONS"
 					exit 2
+				fi
 			else
 				echo "Couldn't download function.sh"
 				exit 1
