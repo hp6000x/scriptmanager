@@ -8,6 +8,8 @@ THISPATH=$(dirname "$THISSCRIPT")
 THISFILE=$(basename "$THISSCRIPT")
 VERSIONURL="" #"https://raw.githubusercontent.com/hp6000x/ /master/VERSION"
 SCRIPTURL="" #"https://raw.githubusercontent.com/hp6000x/ /master/$THISFILE"
+DEBUG=false
+CONFFILE=""
 
 function showGenericHelp
 {
@@ -43,9 +45,114 @@ function showCommandHelp
 	esac
 }
 
-function Init
+function getAvailVersion
+{
+	local tmpname
+	tmpname="$(mktemp)"
+	if (wget -q -O "$tmpname" "$VERSIONURL" > /dev/null 2>&1); then
+		cat "$tmpname"
+		rm "$tmpname"
+	else
+		echo "Unknown"
+	fi
+}
+
+function isGreater
+{
+	test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"
+}
+
+function getKey
+{
+	local key
+	read -r -s -n 1 key
+	echo $key
+}
+
+function updateScript
+{
+	local gitVersion
+	local tmpname
+	local inkey
+	local readme
+	readme="$HOME/Desktop/README.md"
+	gitVersion=$(getAvailVersion)
+	if isGreater "$gitVersion" "$VERSION"; then 
+		echo "Updating $THISSCRIPT to v$gitVersion."
+		tmpname="$(mktemp)"
+		if (wget -q -O "$tmpname" "$SCRIPTURL" > /dev/null 2>&1); then 
+			if (wget -q -o "$readme" "$READMEURL" > /dev/null 2>&1); then
+				echo "README file saved to desktop."
+			else
+				echo "Could not get README file."
+			fi
+			if [[ -e "$THISSCRIPT.bak" ]]; then
+				rm "$THISSCRIPT.bak"
+			fi
+			mv "$THISSCRIPT" "$THISSCRIPT.bak"
+			chmod 755 "$tmpname"
+			mv "$tmpname" "$THISSCRIPT"
+			if [[ -a "$THISSCRIPT" ]]; then
+				echo "Updated script. Hit \"Y\" or Enter to view the README now. Any other key to skip."
+				inkey=$(getKey)
+				case $inkey in
+					("Y"|"y"|"")	less "$readme"
+				esac
+			else
+				echo "Update failed. Restoring backup."
+				cp "$THISSCRIPT.bak" "$THISSCRIPT"
+			fi
+		else #download failed
+			echo "Could not get new script file from $SCRIPTURL. Is the repository still there?"
+		fi
+	elif [[ "$gitVersion" = "$VERSION" ]]; then
+		echo "You are already on the latest version ($VERSION)"
+	elif isGreater "$VERSION" "$gitVersion"; then
+		echo "Your version: $VERSION. Current version: $gitVersion. Can't wait for release, Mr. Developer."
+	elif [[ -z "$gitVersion" ]]; then
+		echo "Online version information not found."
+	fi
+}
+
+function loadSettings
+{
+	if [[ -e "$CONFFILE" ]]; then
+		. "$CONFFILE"
+		settings_changed=false
+	fi
+}
+
+function saveSettings
 {
 	true
+}
+
+function Init
+{
+	local arg
+	local opt
+	local var
+	command="$1"
+	shift
+	while [[ ! -z "$1" ]]; do
+		arg="$1"
+		opt="${arg%=*}" #anything before an equals sign goes in opt. If no "=", the whole string goes in.
+		var="${arg#*=}" #anything after the "=" goes in var
+		case $opt in
+			("--config")		if [[ -z "$var" ]]; then
+									var="$2"
+								fi
+								CONFFILE="$var";;
+			("--debug")			DEBUG=true;;
+			("-h"|"--help")		showCommandHelp "$command"; exit 0;;
+			(*)					echo "Unknown option \"$opt\"."; exit 4;;
+		esac
+		if [[ "$var" = "$2" ]]; then
+			shift
+		fi
+		shift
+	done
+	loadSettings
 }
 
 function Main
@@ -63,35 +170,11 @@ function Main
 
 function Done
 {
-	true
+	if $settings_changed; then
+		saveSettings
+	fi
 }
 
-#get arguments before anything else loads or runs
-echoDebug "Getting command line arguments"
-command="$1"
-shift
-while [[ ! -z "$1" ]]; do
-	arg="$1"
-	opt="${arg%=*}" #anything before an equals sign goes in opt. If no "=", the whole string goes in.
-	var="${arg#*=}" #anything after the "=" goes in var
-	case $opt in
-		("--config")		if [[ -z "$var" ]]; then
-								var="$2"
-							fi
-							CONFFILE="$var";;
-		("--debug")			DEBUG=true;;
-		("-h"|"--help")		showCommandHelp "$command"; exit 0;;
-		(*)					echo "Unknown option \"$opt\"."; exit 4;;
-	esac
-	if [[ "$var" = "$2" ]]; then
-		shift
-	fi
-	shift
-done
-unset arg
-unset opt
-unset var
-
-Init
+Init $@
 Main
 Done
