@@ -1,19 +1,23 @@
 #!/bin/bash
 #scripts - a CLI script manager. Allows one to create/modify/delete (and more) scripts in a repository folder
 #call it without arguments for a list of commands and options.
+#Version: 0.6
+#Changelog:
+#	0.6	Allowed for multiple scripts to be passed to most commands
+#	0.5 Version I got to before I decided to upload to github
 
 showUsage() {
-  echo "version   : 0.5"
-  echo "last edit : 7th July 2019"
+  echo "version   : 0.6"
+  echo "last edit : September 2019"
   echo
   echo "Usage: $0 {command} [ {command options} ... ]"
   echo
   echo "Commands:"
-  echo "  (l)ist    [script name]                   : shows list of scripts, or contents of a script"
-  echo "  (n)ew     {script name}                   : creates a new script, and opens for editing"
+  echo "  (l)ist    [script name [...]]             : shows list of scripts, or contents of a script"
+  echo "  (n)ew     {script name} [script [...]]    : creates a new script, and opens for editing"
   echo "  (c)opy    {existing script} {new script}  : makes a copy of an existing script with a new name and opens it for editing"
-  echo "  kill      {script name}                   : deletes script from repository"
-  echo "  (e)dit    {script name}                   : Calls the defined editor with script as argument"
+  echo "  kill      {script name} [script [...]]    : deletes script from repository"
+  echo "  (e)dit    {script name} [script [...]]    : Calls the defined editor with script as argument"
   echo "  (s)ymlink {script name}   {link name}     : creates a symbolic link (shortcut) to a script"
   echo
   echo "Settings (static):"
@@ -85,12 +89,13 @@ if [[ "$command" = "list" ]] | [[ "$command" = "l" ]]; then
   if [[ -z "$1" ]]; then
     listScripts
   else
-    scrname=$(toLower "$1")
-    if [[ -e "$repo/$scrname" ]]; then
-      echo "Viewing script '$scrname'..."
-      #dialog --textbox $repo/$scrname 1000 1000
-      $viewer "$repo/$scrname"
-    fi
+    for scrname in $@; do
+      if [[ -e "$repo/$scrname" ]]; then
+        echo "Viewing script '$scrname'..."
+        #dialog --textbox $repo/$scrname 1000 1000
+        $viewer "$repo/$scrname"
+      fi
+    done
   fi
 elif [[ "$command" = "copy" ]] | [[ "$command" = "c" ]]; then
   if [[ -e "$repo/$1" ]]; then
@@ -109,62 +114,66 @@ elif [[ "$command" = "copy" ]] | [[ "$command" = "c" ]]; then
 elif [[ "$command" = "new" ]] | [[ "$command" = "n" ]]; then
   if [[ -z "$1" ]]; then
     echo "Enter a name for the new script: (leave blank to abort)"
-    read -r newscr
+    read -r scripts
     if [[ -z "$1" ]]; then
       exit
     fi
   else
-    newscr="$1"
+    scripts="$@"
   fi
-  newscr=$(toLower "$newscr")
-  if [[ -e "$repo/$newscr" ]]; then
-    echo "Sorry, there's already a script with the name $newscr in the repo."
-    exit
-  fi
-  echo "Creating script..."
-  if [[ -e "$repo/$defaultscr" ]]; then
-    cp "$repo/$defaultscr" "$repo/$newscr"
-  else
-    echo "#!/bin/bash" > "$repo/$newscr"
-  fi
-  chmod +x "$repo/$newscr"
-  echo "Launching editor..."
-  $editor "$repo/$newscr" &
+  for newscr in $scripts; do
+    if [[ -e "$repo/$newscr" ]]; then
+      echo "Sorry, there's already a script with the name $newscr in the repo."
+      exit
+    fi
+    echo "Creating script..."
+    if [[ -e "$repo/$defaultscr" ]]; then
+      cp "$repo/$defaultscr" "$repo/$newscr"
+    else
+      echo "#!/bin/bash" > "$repo/$newscr"
+    fi
+    chmod +x "$repo/$newscr"
+    echo "Launching editor..."
+    $editor "$repo/$newscr" &
+  done
   echo "Done."
 elif [[ "$command" = "kill" ]]; then
   if [[ -z "$1" ]]; then
     echo "You must supply a script name to delete."
-  fi
-  killscr=$(toLower "$1")
-  if [[ -e "$repo/$killscr" ]]; then
-    echo "Are you sure you want to remove the script '$killscr'?"
-    echo "Type 'YES' (in uppercase, without quotes) and hit enter to confirm."
-    read -r strcheck
-    if [[ -n "$strcheck" ]]; then
-      if [[ "$strcheck" = "YES" ]]; then
-        echo "Removing file."
-        rm "$repo/$killscr"
-        if [[ -e "$repo/$killscr" ]]; then
-          echo "Hmmm. Couldn't remove $killscr. Check your permissions?"
+  else
+    for killscr in $@; do
+      if [[ -e "$repo/$killscr" ]]; then
+        echo "Are you sure you want to remove the script '$killscr'?"
+        echo "Type 'YES' (in uppercase, without quotes) and hit enter to confirm."
+        read -r strcheck
+        if [[ -n "$strcheck" ]]; then
+          if [[ "$strcheck" = "YES" ]]; then
+            echo "Removing file."
+            rm "$repo/$killscr"
+            if [[ -e "$repo/$killscr" ]]; then
+              echo "Hmmm. Couldn't remove $killscr. Check your permissions?"
+            else
+              echo "$killscr script removed successfully."
+            fi
+          else
+            echo "Aborted."
+          fi
         else
-          echo "$killscr script removed successfully."
+          echo "Aborted."
         fi
       else
-        echo "Aborted."
+        echo "$killscr not found."
       fi
-    else
-      echo "Aborted."
-    fi
-  else
-    echo "$killscr not found."
-    exit
+    done
   fi
 elif [[ "$command" = "edit" ]] | [[ "$command" = "e" ]]; then
   if [[ -z "$1" ]]; then
     echo "You must supply a script name to edit."
+  else
+    for editscr in $@; do
+      $editor "$repo/$editscr" &
+    done
   fi
-  editscr=$(toLower "$1")
-  $editor "$repo/$editscr"
 elif [[ "$command" = "symlink" ]] | [[ "$command" = "s" ]]; then
   if [[ -z "$2" ]]; then
     echo "You must supply two arguments"
