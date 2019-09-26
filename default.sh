@@ -6,8 +6,11 @@ VERSION=""
 THISSCRIPT=$(which "$0")
 THISPATH=$(dirname "$THISSCRIPT")
 THISFILE=$(basename "$THISSCRIPT")
-VERSIONURL="" #"https://raw.githubusercontent.com/hp6000x/ /master/VERSION"
-SCRIPTURL="" #"https://raw.githubusercontent.com/hp6000x/ /master/$THISFILE"
+_ROOTURL="https://raw.githubusercontent.com"
+_UNAME="hp6000x"
+VERSIONURL="$_ROOTURL/$_UNAME/$TITLE/master/VERSION"
+SCRIPTURL="$_ROOTURL/$_UNAME/$TITLE/master/$THISFILE"
+READMEURL="$_ROOTURL/$_UNAME/$TITLE/master/README.md"
 DEBUG=false
 CONFFILE=""
 
